@@ -86,7 +86,8 @@ https://github.com/user-attachments/assets/c2b1a5e7-1640-41fa-82bc-18ca7cbae9e8
 Reads FL Studio's files on disk, so it works without the MIDI connection.
 
 - List installed plugins (native, VST, VST3, ...)
-- Search the plugin preset library (factory and user presets) by name, plugin, and category
+- Search the plugin preset library (factory and user presets, and the presets in installed FLEX packs) by name, plugin, and category
+- List FLEX packs from FLEX's catalog, with which ones are installed
 - Search downloaded FL Cloud Sounds samples by tempo, key, type, tags, and genre
 
 ### Piano Roll Control
@@ -359,7 +360,8 @@ fl-studio-mcp
 | Tool | Description |
 |------|-------------|
 | `fl_list_installed_plugins` | List installed plugins from FL Studio's plugin database |
-| `fl_search_presets` | Search plugin presets (.fst) by name, plugin, and category |
+| `fl_search_presets` | Search plugin presets (.fst and FLEX packs) by name, plugin, and category |
+| `fl_list_flex_packs` | List FLEX packs (catalog and installed) with preset counts |
 | `fl_search_cloud_sounds` | Search downloaded FL Cloud samples by BPM, key, type, and tags |
 
 Set `FL_STUDIO_PATH` if FL Studio is not installed under `Program Files\Image-Line`, so factory presets can be found.

@@ -39,11 +39,12 @@ def register_library_tools(mcp: FastMCP) -> None:
         category: str | None = None,
         limit: int = 50
     ) -> dict:
-        """Search the plugin preset (.fst) library on disk.
+        """Search the plugin preset library on disk.
 
-        Covers FL Studio's factory presets and the user's saved presets. The
-        result includes a per plugin/category breakdown of all matches, which
-        helps narrow a broad search.
+        Covers FL Studio's factory .fst presets, the user's saved presets, and
+        the presets inside installed FLEX packs (plugin "FLEX", with the pack
+        name as the category). The result includes a per plugin/category
+        breakdown of all matches, which helps narrow a broad search.
 
         Args:
             query: Words that must all appear in the preset name, category or plugin
@@ -54,6 +55,25 @@ def register_library_tools(mcp: FastMCP) -> None:
         return library.search_presets(
             query=query, plugin=plugin, category=category, limit=limit
         )
+
+    @mcp.tool()
+    def fl_list_flex_packs(query: str = "", installed_only: bool = False) -> dict:
+        """List FLEX preset packs, installed or available from Image-Line.
+
+        Combines FLEX's pack catalog with the pack files on disk. Installed
+        packs report their preset count; use fl_search_presets with
+        plugin="FLEX" to see the presets themselves.
+
+        Args:
+            query: Words that must all appear in the pack name, genre or instruments
+            installed_only: Only list packs that are installed
+        """
+        packs = library.list_flex_packs(query=query, installed_only=installed_only)
+        return {
+            "total": len(packs),
+            "installed": sum(1 for p in packs if p["installed"]),
+            "packs": packs,
+        }
 
     @mcp.tool()
     def fl_search_cloud_sounds(

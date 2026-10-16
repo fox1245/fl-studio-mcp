@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import struct
 from pathlib import Path
 
 import pytest
@@ -77,7 +79,7 @@ def preset_roots(tmp_path: Path) -> list[tuple[str, Path]]:
 
 
 def test_iter_presets_fields(preset_roots: list[tuple[str, Path]]) -> None:
-    presets = {p["name"]: p for p in library.iter_presets(preset_roots)}
+    presets = {p["name"]: p for p in library.iter_presets(preset_roots, flex_dirs=[])}
     assert presets["Acid bass"]["plugin"] == "Sytrus"
     assert presets["Acid bass"]["kind"] == "generator"
     assert presets["Acid bass"]["category"] == "Bass"
@@ -87,16 +89,108 @@ def test_iter_presets_fields(preset_roots: list[tuple[str, Path]]) -> None:
 
 
 def test_search_presets(preset_roots: list[tuple[str, Path]]) -> None:
-    result = library.search_presets(query="bass", roots=preset_roots)
+    result = library.search_presets(query="bass", roots=preset_roots, flex_dirs=[])
     assert {p["name"] for p in result["presets"]} == {"Acid bass", "Sub bass", "My bass"}
     assert result["categories"] == {"Sytrus/Bass": 1, "Harmless/Bass": 1, "Sytrus": 1}
 
-    sytrus = library.search_presets(plugin="sytrus", category="bass", roots=preset_roots)
+    sytrus = library.search_presets(
+        plugin="sytrus", category="bass", roots=preset_roots, flex_dirs=[]
+    )
     assert [p["name"] for p in sytrus["presets"]] == ["Acid bass"]
 
-    limited = library.search_presets(plugin="Sytrus", limit=2, roots=preset_roots)
+    limited = library.search_presets(
+        plugin="Sytrus", limit=2, roots=preset_roots, flex_dirs=[]
+    )
     assert limited["total"] == 4
     assert len(limited["presets"]) == 2
+
+
+# =============================================================================
+# FLEX packs
+# =============================================================================
+
+
+def _write_flex_pack(path: Path, entry_names: list[str]) -> Path:
+    """Write a pack in FLEX's container layout with empty entry contents."""
+    table = b""
+    for name in entry_names:
+        raw = name.encode() + b"\0"
+        table += struct.pack(">I", len(raw)) + raw + struct.pack(">QQ", 0, 0)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\x01\x00\x00\x02" + struct.pack(">I", len(entry_names)) + table)
+    return path
+
+
+@pytest.fixture
+def flex_dir(tmp_path: Path) -> Path:
+    packs = tmp_path / "Packs"
+    _write_flex_pack(packs / "Core 808s.flex2pack", [
+        "presetsIndex.presetsIndex",
+        "pcf.pcf",
+        "808 Astronomic.flex2preset",
+        "808 Astronomic.usedsamples",
+        "808 Avalanche.flex2preset",
+        "MSXII_808s_C_01.flac",
+    ])
+    _write_flex_pack(packs / "Arksun Cityscape.flexpack", [
+        "presetsIndex.presetsIndex",
+        "70s Bounce.flexpreset",
+    ])
+    return packs
+
+
+@pytest.fixture
+def flex_catalog_file(tmp_path: Path) -> Path:
+    catalog = [
+        {"productName": "Core 808s", "filename": "/FLEX/Core 808s.flex2pack",
+         "genre": "Hip Hop", "instrument": "Bass;Drums", "availability": "free"},
+        {"productName": "Chiptune", "filename": "/FLEX/Chiptune.flexpack",
+         "genre": "Electronic", "instrument": "Synth", "availability": "commercial"},
+    ]
+    return _write(tmp_path / "cache.json", json.dumps(catalog))
+
+
+def test_read_flex_pack_presets(flex_dir: Path) -> None:
+    names = library.read_flex_pack_presets(flex_dir / "Core 808s.flex2pack")
+    assert names == ["808 Astronomic", "808 Avalanche"]
+
+
+def test_read_flex_pack_presets_tolerates_bad_files(tmp_path: Path) -> None:
+    assert library.read_flex_pack_presets(tmp_path / "missing.flexpack") == []
+    truncated = _write_flex_pack(tmp_path / "t.flexpack", ["A.flexpreset", "B.flexpreset"])
+    truncated.write_bytes(truncated.read_bytes()[:-20])
+    assert library.read_flex_pack_presets(truncated) == ["A"]
+
+
+def test_search_presets_includes_flex(
+    preset_roots: list[tuple[str, Path]], flex_dir: Path
+) -> None:
+    result = library.search_presets(query="808", roots=preset_roots, flex_dirs=[flex_dir])
+    assert [(p["plugin"], p["category"], p["name"]) for p in result["presets"]] == [
+        ("FLEX", "Core 808s", "808 Astronomic"),
+        ("FLEX", "Core 808s", "808 Avalanche"),
+    ]
+    assert result["presets"][0]["source"] == "flex-pack"
+
+
+def test_list_flex_packs(flex_dir: Path, flex_catalog_file: Path) -> None:
+    def packs(**kwargs) -> dict[str, dict]:
+        found = library.list_flex_packs(
+            flex_dirs=[flex_dir], catalog_path=flex_catalog_file, **kwargs
+        )
+        return {p["name"]: p for p in found}
+
+    every = packs()
+    # Arksun Cityscape is installed but missing from the catalog.
+    assert set(every) == {"Core 808s", "Chiptune", "Arksun Cityscape"}
+    assert every["Core 808s"]["installed"] is True
+    assert every["Core 808s"]["presets"] == 2
+    assert every["Core 808s"]["instruments"] == ["Bass", "Drums"]
+    assert every["Chiptune"]["installed"] is False
+    assert every["Chiptune"]["presets"] is None
+
+    assert set(packs(installed_only=True)) == {"Core 808s", "Arksun Cityscape"}
+    assert set(packs(query="drums")) == {"Core 808s"}
 
 
 # =============================================================================
@@ -158,7 +252,7 @@ def test_search_cloud_sounds_rejects_bad_key(cloud_dir: Path) -> None:
 
 def test_missing_folders_are_empty(tmp_path: Path) -> None:
     assert library.list_installed_plugins(database_dir=tmp_path / "nope") == []
-    assert library.search_presets(roots=[("user", tmp_path / "nope")])["total"] == 0
+    assert library.search_presets(roots=[("user", tmp_path / "nope")], flex_dirs=[])["total"] == 0
     assert list(library.iter_cloud_sounds(tmp_path / "nope")) == []
 
 

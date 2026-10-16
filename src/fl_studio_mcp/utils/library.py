@@ -1,14 +1,17 @@
 """Read FL Studio's content library from disk.
 
-Covers installed plugins, plugin presets and downloaded FL Cloud sounds. None of
+Covers installed plugins, plugin presets, FLEX packs and downloaded FL Cloud
+sounds. None of
 this needs FL Studio to be running: it reads the files FL Studio keeps in its
 install folder and in the user data folder (Documents/Image-Line).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import struct
 from collections import Counter
 from pathlib import Path
 from typing import Iterator
@@ -139,8 +142,16 @@ def preset_roots() -> list[tuple[str, Path]]:
     return roots
 
 
-def iter_presets(roots: list[tuple[str, Path]] | None = None) -> Iterator[dict]:
-    """Yield every .fst preset as {name, plugin, kind, category, source, path}."""
+def iter_presets(
+    roots: list[tuple[str, Path]] | None = None,
+    flex_dirs: list[Path] | None = None,
+) -> Iterator[dict]:
+    """Yield every preset as {name, plugin, kind, category, source, path}.
+
+    Covers .fst presets and the presets inside installed FLEX packs, which
+    are listed with plugin "FLEX" and the pack name as their category.
+    """
+    yield from iter_flex_presets(flex_dirs)
     for source, root in roots if roots is not None else preset_roots():
         if not root.is_dir():
             continue
@@ -164,6 +175,7 @@ def search_presets(
     category: str | None = None,
     limit: int = 50,
     roots: list[tuple[str, Path]] | None = None,
+    flex_dirs: list[Path] | None = None,
 ) -> dict:
     """Search plugin presets by name, plugin and category.
 
@@ -172,7 +184,7 @@ def search_presets(
     """
     tokens = query.lower().split()
     matches = [
-        p for p in iter_presets(roots)
+        p for p in iter_presets(roots, flex_dirs)
         if (plugin is None or p["plugin"].lower() == plugin.lower())
         and (category is None or category.lower() in p["category"].lower())
         and _matches(tokens, p["name"], p["category"], p["plugin"])
@@ -185,6 +197,142 @@ def search_presets(
         "categories": dict(categories.most_common(40)),
         "presets": matches[:limit],
     }
+
+
+# =============================================================================
+# FLEX packs
+# =============================================================================
+
+_FLEX_PACK_SUFFIXES = (".flexpack", ".flex2pack")
+_FLEX_PRESET_SUFFIXES = (".flexpreset", ".flex2preset")
+
+
+def flex_pack_dirs() -> list[Path]:
+    """The folders FLEX loads its preset packs from."""
+    dirs = []
+    fl_dir = install_dir()
+    if fl_dir is not None:
+        dirs.append(fl_dir / "Data" / "Patches" / "Packs" / "FLEX" / "Packs")
+    dirs.append(user_data_dir() / "FLEX" / "Packs")
+    return dirs
+
+
+def read_flex_pack_presets(path: Path) -> list[str]:
+    """List the preset names stored in a FLEX pack file.
+
+    A pack starts with a 4-byte header and a big-endian u32 entry count. Each
+    entry is a u32 name length, the NUL-terminated name, and two u64s (offset
+    and size). Presets are the entries named "<preset>.flexpreset" or
+    "<preset>.flex2preset"; the rest are samples and pack metadata.
+
+    Only the entry table at the start is read; packs can be hundreds of MB.
+    """
+    names = []
+    try:
+        with path.open("rb") as f:
+            header = f.read(8)
+            if len(header) < 8:
+                return []
+            (count,) = struct.unpack(">I", header[4:8])
+            for _ in range(count):
+                raw = f.read(4)
+                if len(raw) < 4:
+                    break
+                (length,) = struct.unpack(">I", raw)
+                if length == 0 or length > 4096:
+                    break
+                entry = f.read(length + 16)
+                if len(entry) < length + 16:
+                    break
+                name = entry[:length].rstrip(b"\0").decode("utf-8", "replace")
+                for suffix in _FLEX_PRESET_SUFFIXES:
+                    if name.endswith(suffix):
+                        names.append(name[: -len(suffix)])
+    except OSError:
+        pass
+    return names
+
+
+def _installed_flex_packs(flex_dirs: list[Path] | None) -> list[Path]:
+    packs = []
+    for d in flex_dirs if flex_dirs is not None else flex_pack_dirs():
+        if d.is_dir():
+            packs.extend(sorted(p for p in d.iterdir() if p.suffix in _FLEX_PACK_SUFFIXES))
+    return packs
+
+
+def flex_catalog(catalog_path: Path | None = None) -> list[dict]:
+    """FLEX's catalog of every pack Image-Line offers, from its cache.json."""
+    path = catalog_path or user_data_dir() / "FLEX" / "cache.json"
+    try:
+        catalog = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return []
+    return catalog if isinstance(catalog, list) else []
+
+
+def iter_flex_presets(flex_dirs: list[Path] | None = None) -> Iterator[dict]:
+    """Yield the presets in installed FLEX packs, shaped like iter_presets."""
+    for pack in _installed_flex_packs(flex_dirs):
+        for name in read_flex_pack_presets(pack):
+            yield {
+                "name": name,
+                "plugin": "FLEX",
+                "kind": "generator",
+                "category": pack.stem,
+                "source": "flex-pack",
+                "path": str(pack),
+            }
+
+
+def list_flex_packs(
+    query: str = "",
+    installed_only: bool = False,
+    flex_dirs: list[Path] | None = None,
+    catalog_path: Path | None = None,
+) -> list[dict]:
+    """List FLEX packs: every pack in FLEX's catalog plus any installed ones.
+
+    Args:
+        query: Words that must all appear in the pack name, genre or instruments
+        installed_only: Only list packs whose file is installed
+        flex_dirs: Folders holding installed pack files (for tests)
+        catalog_path: FLEX's cache.json catalog (for tests)
+    """
+    installed = {p.name.lower(): p for p in _installed_flex_packs(flex_dirs)}
+    tokens = query.lower().split()
+
+    packs = []
+    seen = set()
+    for item in flex_catalog(catalog_path):
+        filename = Path(str(item.get("filename", "")).replace("\\", "/")).name
+        seen.add(filename.lower())
+        packs.append({
+            "name": item.get("productName", filename),
+            "genre": item.get("genre", ""),
+            "instruments": [i for i in str(item.get("instrument", "")).split(";") if i],
+            "availability": item.get("availability", ""),
+            "pack_file": installed.get(filename.lower()),
+        })
+    for key, path in installed.items():
+        if key not in seen:
+            packs.append({
+                "name": path.stem, "genre": "", "instruments": [], "availability": "",
+                "pack_file": path,
+            })
+
+    result = []
+    for pack in packs:
+        path = pack.pop("pack_file")
+        if installed_only and path is None:
+            continue
+        if not _matches(tokens, pack["name"], pack["genre"], *pack["instruments"]):
+            continue
+        pack["installed"] = path is not None
+        pack["presets"] = len(read_flex_pack_presets(path)) if path else None
+        pack["path"] = str(path) if path else ""
+        result.append(pack)
+    return result
 
 
 # =============================================================================
