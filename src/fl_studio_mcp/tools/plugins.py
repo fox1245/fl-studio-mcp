@@ -267,6 +267,40 @@ def register_plugin_tools(mcp: FastMCP) -> None:
         return f"Switched '{plugin_name}' to previous preset"
 
     @mcp.tool()
+    def fl_get_preset_names(
+        index: int,
+        slot_index: int = -1,
+        use_global_index: bool = True,
+        max_presets: int = 200
+    ) -> dict:
+        """List the names of the presets a loaded plugin offers.
+
+        Only works for plugins that expose their presets to FL Studio; others
+        report a count of 0.
+
+        Args:
+            index: Channel index (global) or mixer track index
+            slot_index: Effect slot index for mixer plugins (-1 for channel rack)
+            use_global_index: Whether to use global channel indexing
+            max_presets: Maximum number of preset names to return (default 200)
+        """
+        conn = get_connection()
+        result = conn.send_command("plugins.getPresetNames", {
+            "index": index,
+            "slot_index": slot_index,
+            "use_global": use_global_index,
+            "max_presets": max_presets,
+        }, timeout=5.0)
+
+        if not result.get("success", False) and "error" in result:
+            return {"error": result["error"]}
+
+        return {
+            "count": result.get("count", 0),
+            "presets": result.get("presets", []),
+        }
+
+    @mcp.tool()
     def fl_get_plugin_color(
         index: int,
         slot_index: int = -1,

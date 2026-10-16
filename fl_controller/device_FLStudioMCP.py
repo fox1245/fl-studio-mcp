@@ -226,6 +226,8 @@ def dispatch_command(action: str, params: dict) -> dict:
         return handle_plugins_next_preset(params)
     elif action == "plugins.prevPreset":
         return handle_plugins_prev_preset(params)
+    elif action == "plugins.getPresetNames":
+        return handle_plugins_get_preset_names(params)
     elif action == "plugins.getColor":
         return handle_plugins_get_color(params)
 
@@ -872,6 +874,33 @@ def handle_plugins_prev_preset(params: dict) -> dict:
 
     return {"plugin_name": plugin_name}
 
+
+def handle_plugins_get_preset_names(params: dict) -> dict:
+    """List the names of a plugin's presets."""
+    index = params.get("index", 0)
+    slot_index = params.get("slot_index", -1)
+    use_global = params.get("use_global", True)
+    max_presets = params.get("max_presets", 200)
+
+    if slot_index >= 0:
+        count = plugins.getPresetCount(index, slot_index, True)
+    else:
+        count = plugins.getPresetCount(index, -1, use_global)
+
+    preset_list = []
+    for i in range(min(count, max_presets)):
+        try:
+            if slot_index >= 0:
+                name = plugins.getName(index, slot_index, midi.FPN_Preset, i, True)
+            else:
+                name = plugins.getName(index, -1, midi.FPN_Preset, i, use_global)
+
+            preset_list.append({"index": i, "name": name})
+        except Exception as e:
+            print(f"Warning: could not read preset {i}: {e}")
+            continue
+
+    return {"count": count, "presets": preset_list}
 
 
 def handle_plugins_get_color(params: dict) -> dict:

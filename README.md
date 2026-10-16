@@ -78,7 +78,16 @@ https://github.com/user-attachments/assets/c2b1a5e7-1640-41fa-82bc-18ca7cbae9e8
 - List plugin parameters
 - Get/set parameter values
 - Navigate presets (next/previous)
+- List a loaded plugin's preset names
 - Query plugin info
+
+### Content Library
+
+Reads FL Studio's files on disk, so it works without the MIDI connection.
+
+- List installed plugins (native, VST, VST3, ...)
+- Search the plugin preset library (factory and user presets) by name, plugin, and category
+- Search downloaded FL Cloud Sounds samples by tempo, key, type, tags, and genre
 
 ### Piano Roll Control
 
@@ -94,6 +103,8 @@ https://github.com/user-attachments/assets/c2b1a5e7-1640-41fa-82bc-18ca7cbae9e8
 ## Limitations
 
 > **Cannot load plugins** — The FL Studio scripting API does not support loading new VST/AU plugins. You can only control parameters of plugins that are already loaded in your project.
+
+> **Cannot load presets or samples** — The library tools find presets and FL Cloud samples on disk, but the scripting API cannot load a preset file or a sample into a channel. Drag the file in from FL Studio's browser yourself. Only samples you have already downloaded through the SOUNDS browser tab can be searched; the online FL Cloud catalog cannot.
 
 > **No pattern management (yet)** — The server can write notes and step-sequencer steps into a pattern, but it has no tools to create, switch, rename, or clone patterns. Everything goes into whichever pattern is currently selected in FL Studio, so pick or create the pattern yourself before asking for notes. (FL Studio's scripting API does support this through the `patterns` module, so it could be added.)
 
@@ -340,7 +351,18 @@ fl-studio-mcp
 | `fl_get_preset_count` | Get preset count |
 | `fl_next_preset` | Next preset |
 | `fl_prev_preset` | Previous preset |
+| `fl_get_preset_names` | List a loaded plugin's preset names |
 | `fl_get_plugin_color` | Get plugin color |
+
+### Content Library
+
+| Tool | Description |
+|------|-------------|
+| `fl_list_installed_plugins` | List installed plugins from FL Studio's plugin database |
+| `fl_search_presets` | Search plugin presets (.fst) by name, plugin, and category |
+| `fl_search_cloud_sounds` | Search downloaded FL Cloud samples by BPM, key, type, and tags |
+
+Set `FL_STUDIO_PATH` if FL Studio is not installed under `Program Files\Image-Line`, so factory presets can be found.
 
 ### Piano Roll
 
@@ -504,6 +526,7 @@ fl-studio-mcp/
 │   ├── server.py                 # FastMCP server entry point
 │   ├── tools/                    # MCP tool implementations
 │   │   ├── channels.py
+│   │   ├── library.py
 │   │   ├── mixer.py
 │   │   ├── piano_roll.py
 │   │   ├── plugins.py
@@ -511,6 +534,7 @@ fl-studio-mcp/
 │   └── utils/
 │       ├── connection.py         # FL Studio connection wrapper
 │       ├── fl_trigger.py         # Piano roll keystroke trigger
+│       ├── library.py            # Reads plugins, presets and FL Cloud sounds on disk
 │       └── midi_connection.py    # MIDI + JSON communication layer
 ├── install.sh                    # One-command installer (macOS/Linux)
 └── install.ps1                   # One-command installer (Windows)
