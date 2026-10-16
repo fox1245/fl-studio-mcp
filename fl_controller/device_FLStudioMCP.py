@@ -702,12 +702,17 @@ def handle_plugins_get_name(params: dict) -> dict:
     slot_index = params.get("slot_index", -1)
     use_global = params.get("use_global", True)
 
+    # getPluginName's 3rd argument is userName, NOT useGlobalIndex:
+    # getPluginName(index, slotIndex, userName, useGlobalIndex).
+    # userName=True returns the name the user gave the channel/slot instead.
     if slot_index >= 0:
-        name = plugins.getPluginName(index, slot_index, True)
+        name = plugins.getPluginName(index, slot_index, False, True)
+        user_name = plugins.getPluginName(index, slot_index, True, True)
     else:
-        name = plugins.getPluginName(index, -1, use_global)
+        name = plugins.getPluginName(index, -1, False, use_global)
+        user_name = plugins.getPluginName(index, -1, True, use_global)
 
-    return {"name": name}
+    return {"name": name, "user_name": user_name}
 
 
 def handle_plugins_get_param_count(params: dict) -> dict:
@@ -742,11 +747,11 @@ def handle_plugins_get_params(params: dict) -> dict:
             if slot_index >= 0:
                 name = plugins.getParamName(i, index, slot_index, True)
                 value = plugins.getParamValue(i, index, slot_index, True)
-                value_str = plugins.getParamValueString(i, index, slot_index, True)
+                value_str = plugins.getParamValueString(i, index, slot_index, midi.PIM_None, True)
             else:
                 name = plugins.getParamName(i, index, -1, use_global)
                 value = plugins.getParamValue(i, index, -1, use_global)
-                value_str = plugins.getParamValueString(i, index, -1, use_global)
+                value_str = plugins.getParamValueString(i, index, -1, midi.PIM_None, use_global)
 
             param_list.append({
                 "index": i,
@@ -768,14 +773,19 @@ def handle_plugins_get_param_value(params: dict) -> dict:
     slot_index = params.get("slot_index", -1)
     use_global = params.get("use_global", True)
 
+    # getParamValueString's 4th argument is pickupMode, NOT useGlobalIndex:
+    # getParamValueString(paramIndex, index, slotIndex, pickupMode, useGlobalIndex).
+    pim_none = midi.PIM_None
     if slot_index >= 0:
         name = plugins.getParamName(param_index, plugin_index, slot_index, True)
         value = plugins.getParamValue(param_index, plugin_index, slot_index, True)
-        value_str = plugins.getParamValueString(param_index, plugin_index, slot_index, True)
+        value_str = plugins.getParamValueString(
+            param_index, plugin_index, slot_index, pim_none, True
+        )
     else:
         name = plugins.getParamName(param_index, plugin_index, -1, use_global)
         value = plugins.getParamValue(param_index, plugin_index, -1, use_global)
-        value_str = plugins.getParamValueString(param_index, plugin_index, -1, use_global)
+        value_str = plugins.getParamValueString(param_index, plugin_index, -1, pim_none, use_global)
 
     return {
         "index": param_index,
@@ -801,12 +811,14 @@ def handle_plugins_set_param_value(params: dict) -> dict:
         name = plugins.getParamName(param_index, plugin_index, slot_index, True)
         plugins.setParamValue(value, param_index, plugin_index, slot_index, pim_none, True)
         new_value = plugins.getParamValue(param_index, plugin_index, slot_index, True)
-        value_str = plugins.getParamValueString(param_index, plugin_index, slot_index, True)
+        value_str = plugins.getParamValueString(
+            param_index, plugin_index, slot_index, pim_none, True
+        )
     else:
         name = plugins.getParamName(param_index, plugin_index, -1, use_global)
         plugins.setParamValue(value, param_index, plugin_index, -1, pim_none, use_global)
         new_value = plugins.getParamValue(param_index, plugin_index, -1, use_global)
-        value_str = plugins.getParamValueString(param_index, plugin_index, -1, use_global)
+        value_str = plugins.getParamValueString(param_index, plugin_index, -1, pim_none, use_global)
 
     return {
         "name": name,
@@ -836,10 +848,10 @@ def handle_plugins_next_preset(params: dict) -> dict:
     use_global = params.get("use_global", True)
 
     if slot_index >= 0:
-        plugin_name = plugins.getPluginName(index, slot_index, True)
+        plugin_name = plugins.getPluginName(index, slot_index, False, True)
         plugins.nextPreset(index, slot_index, True)
     else:
-        plugin_name = plugins.getPluginName(index, -1, use_global)
+        plugin_name = plugins.getPluginName(index, -1, False, use_global)
         plugins.nextPreset(index, -1, use_global)
 
     return {"plugin_name": plugin_name}
@@ -852,13 +864,14 @@ def handle_plugins_prev_preset(params: dict) -> dict:
     use_global = params.get("use_global", True)
 
     if slot_index >= 0:
-        plugin_name = plugins.getPluginName(index, slot_index, True)
+        plugin_name = plugins.getPluginName(index, slot_index, False, True)
         plugins.prevPreset(index, slot_index, True)
     else:
-        plugin_name = plugins.getPluginName(index, -1, use_global)
+        plugin_name = plugins.getPluginName(index, -1, False, use_global)
         plugins.prevPreset(index, -1, use_global)
 
     return {"plugin_name": plugin_name}
+
 
 
 def handle_plugins_get_color(params: dict) -> dict:
@@ -868,8 +881,8 @@ def handle_plugins_get_color(params: dict) -> dict:
     use_global = params.get("use_global", True)
 
     if slot_index >= 0:
-        color = plugins.getColor(index, slot_index, True)
+        color = plugins.getColor(index, slot_index, midi.GC_BackgroundColor, True)
     else:
-        color = plugins.getColor(index, -1, use_global)
+        color = plugins.getColor(index, -1, midi.GC_BackgroundColor, use_global)
 
     return {"color": hex(color)}
