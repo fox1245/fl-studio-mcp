@@ -546,7 +546,9 @@ def handle_channels_set_volume(params: dict) -> dict:
     """Set channel volume."""
     index = params.get("index", 0)
     volume = params.get("volume", 0.8)
-    channels.setChannelVolume(index, volume, True)
+    # setChannelVolume's 3rd argument is pickupMode, NOT useGlobalIndex:
+    # setChannelVolume(index, volume, pickupMode, useGlobalIndex).
+    channels.setChannelVolume(index, volume, midi.PIM_None, True)
     return {
         "volume": channels.getChannelVolume(index, True),
         "channel_name": channels.getChannelName(index, True),
@@ -557,7 +559,8 @@ def handle_channels_set_pan(params: dict) -> dict:
     """Set channel pan."""
     index = params.get("index", 0)
     pan = params.get("pan", 0.0)
-    channels.setChannelPan(index, pan, True)
+    # Same argument order as setChannelVolume: (index, pan, pickupMode, useGlobalIndex).
+    channels.setChannelPan(index, pan, midi.PIM_None, True)
     return {
         "pan": channels.getChannelPan(index, True),
         "channel_name": channels.getChannelName(index, True),
