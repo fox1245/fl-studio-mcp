@@ -911,9 +911,12 @@ def handle_plugins_get_color(params: dict) -> dict:
     slot_index = params.get("slot_index", -1)
     use_global = params.get("use_global", True)
 
+    # getColor(index, slotIndex, flag, paramIndex, useGlobalIndex): the 4th
+    # argument is paramIndex (the stubs leave it out), so useGlobalIndex is
+    # passed by name.
     if slot_index >= 0:
-        color = plugins.getColor(index, slot_index, midi.GC_BackgroundColor, True)
+        color = plugins.getColor(index, slot_index, midi.GC_BackgroundColor, useGlobalIndex=True)
     else:
-        color = plugins.getColor(index, -1, midi.GC_BackgroundColor, use_global)
+        color = plugins.getColor(index, -1, midi.GC_BackgroundColor, useGlobalIndex=use_global)
 
     return {"color": hex(color)}
