@@ -468,7 +468,8 @@ def handle_channels_get_info(params: dict) -> dict:
         "index": index,
         "name": channels.getChannelName(index, use_global),
         "color": hex(channels.getChannelColor(index, use_global)),
-        "volume": channels.getChannelVolume(index, use_global),
+        # getChannelVolume(index, mode, useGlobalIndex): mode True returns dB.
+        "volume": channels.getChannelVolume(index, False, use_global),
         "pan": channels.getChannelPan(index, use_global),
         "pitch": channels.getChannelPitch(index, useGlobalIndex=use_global),
         "is_muted": channels.isChannelMuted(index, use_global) == 1,
@@ -506,7 +507,7 @@ def handle_channels_get_selected() -> dict:
         "channel": {
             "index": index,
             "name": channels.getChannelName(index, True),
-            "volume": channels.getChannelVolume(index, True),
+            "volume": channels.getChannelVolume(index, False, True),
             "pan": channels.getChannelPan(index, True),
             "is_muted": channels.isChannelMuted(index, True) == 1,
             "is_solo": channels.isChannelSolo(index, True) == 1,
@@ -550,7 +551,7 @@ def handle_channels_set_volume(params: dict) -> dict:
     # setChannelVolume(index, volume, pickupMode, useGlobalIndex).
     channels.setChannelVolume(index, volume, midi.PIM_None, True)
     return {
-        "volume": channels.getChannelVolume(index, True),
+        "volume": channels.getChannelVolume(index, False, True),
         "channel_name": channels.getChannelName(index, True),
     }
 
