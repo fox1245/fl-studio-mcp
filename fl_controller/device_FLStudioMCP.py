@@ -470,6 +470,7 @@ def handle_channels_get_info(params: dict) -> dict:
         "color": hex(channels.getChannelColor(index, use_global)),
         # getChannelVolume(index, mode, useGlobalIndex): mode True returns dB.
         "volume": channels.getChannelVolume(index, False, use_global),
+        "volume_db": channels.getChannelVolume(index, True, use_global),
         "pan": channels.getChannelPan(index, use_global),
         "pitch": channels.getChannelPitch(index, useGlobalIndex=use_global),
         "is_muted": channels.isChannelMuted(index, use_global) == 1,
@@ -552,6 +553,7 @@ def handle_channels_set_volume(params: dict) -> dict:
     channels.setChannelVolume(index, volume, midi.PIM_None, True)
     return {
         "volume": channels.getChannelVolume(index, False, True),
+        "volume_db": channels.getChannelVolume(index, True, True),
         "channel_name": channels.getChannelName(index, True),
     }
 

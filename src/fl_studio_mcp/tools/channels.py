@@ -50,6 +50,7 @@ def register_channel_tools(mcp: FastMCP) -> None:
             "name": result.get("name", ""),
             "color": result.get("color", "0x0"),
             "volume": result.get("volume", 0),
+            "volume_db": result.get("volume_db", 0),
             "pan": result.get("pan", 0),
             "pitch": result.get("pitch", 0),
             "is_muted": result.get("is_muted", False),
@@ -189,7 +190,8 @@ def register_channel_tools(mcp: FastMCP) -> None:
 
         channel_name = result.get("channel_name", f"Channel {index}")
         new_volume = result.get("volume", volume)
-        return f"Channel '{channel_name}' volume set to {new_volume:.2f}"
+        new_volume_db = result.get("volume_db", 0)
+        return f"Channel '{channel_name}' volume set to {new_volume:.2f} ({new_volume_db:.1f} dB)"
 
     @mcp.tool()
     def fl_set_channel_pan(index: int, pan: float) -> str:
